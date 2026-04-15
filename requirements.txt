@@ -1,0 +1,5 @@
+cryptography
+pytest
+qiskit
+qiskit-aer
+matplotlib

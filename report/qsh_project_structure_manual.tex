@@ -1,0 +1,267 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+\title{\textbf{QSH Project Structure and Module Responsibilities}\\
+\large Detailed Architecture and File-Level Role Map}
+\author{Internal Technical Documentation}
+\date{\today}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document provides a file-by-file and module-by-module map of the QSH codebase. It is separate from the research report and focuses on implementation architecture, runtime paths, security/logging responsibilities, and maintenance guidance. The goal is to make the repository easier to navigate for contributors, auditors, and future refactoring work.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Repository-Level View}
+
+\subsection{High-Level Layout}
+\begin{lstlisting}
+qsh/
+├─ app/                     # Runtime Python code
+│  ├─ main.py               # Primary CLI entrypoint
+│  ├─ client.py             # Thin wrapper to main.py
+│  ├─ server.py             # Thin wrapper to main.py
+│  ├─ config.py             # Shared runtime configuration model
+│  ├─ agent/                # Application actions (shell/file/system)
+│  ├─ core/                 # Core transport/session/auth orchestration
+│  ├─ crypto/               # BB84 simulation, KDF, AEAD, signatures
+│  ├─ protocol/             # Handshake/messages/packet encoder
+│  ├─ server/               # Legacy dispatcher/controller registry path
+│  ├─ utils/                # Logging and helper utilities
+│  └─ tests/                # Unit tests
+├─ scripts/
+│  └─ generate_qkd_figures.py
+├─ report/
+│  ├─ qsh_research_report.tex
+│  ├─ qsh_project_structure_manual.tex
+│  ├─ build_report.ps1
+│  ├─ data/*.csv
+│  └─ figures/*.png
+├─ docs/
+│  └─ protocol.md
+├─ README.md
+└─ USAGE_GUIDE.md
+\end{lstlisting}
+
+\subsection{Execution Reality}
+There are two important layers:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Authoritative runtime path}: \texttt{main.py} + \texttt{core/} + \texttt{protocol/handshake.py} + \texttt{crypto/} + \texttt{agent/} + \texttt{utils/logger.py}.
+  \item \textbf{Legacy/scaffolding path}: \texttt{app/server/} and \texttt{protocol/router.py} still exist but are not the main path used by current CLI.
+\end{itemize}
+
+\section{Runtime Flow Map}
+
+\subsection{Server Path}
+\begin{enumerate}[leftmargin=1.4em]
+  \item CLI in \texttt{app/main.py} parses arguments and builds \texttt{AppConfig}.
+  \item \texttt{utils.logger.configure\_logging()} initializes console + rotating file logging.
+  \item \texttt{core.server.start()} creates TCP listener.
+  \item \texttt{protocol.handshake.server\_handshake()} performs HELLO + BB84/QKD + HKDF/AES setup.
+  \item First encrypted action must be \texttt{auth}; enforced by \texttt{core.server}.
+  \item \texttt{core.auth\_security.AuthGuard} applies throttle + lockout.
+  \item Once authenticated, actions are handled via \texttt{agent.executor} and \texttt{agent.file\_transfer}.
+\end{enumerate}
+
+\subsection{Client Path}
+\begin{enumerate}[leftmargin=1.4em]
+  \item CLI in \texttt{app/main.py} chooses role (\texttt{shell/upload/download/session}).
+  \item \texttt{core.client} opens socket and runs \texttt{client\_handshake()}.
+  \item Encrypted \texttt{auth} request is sent before any privileged action.
+  \item In \texttt{session} mode, one persistent connection serves many commands.
+\end{enumerate}
+
+\section{Detailed Module Responsibilities}
+
+\subsection{\texttt{app/main.py}}
+\textbf{Role}: canonical command router for all operational modes.
+\begin{itemize}[leftmargin=1.4em]
+  \item Defines shared CLI arguments (network, Eve, authentication, logging).
+  \item Supports roles: \texttt{server}, \texttt{shell}, \texttt{session}, \texttt{upload}, \texttt{download}, \texttt{hash-password}.
+  \item Configures logging early, then dispatches to server/client functions.
+\end{itemize}
+
+\subsection{\texttt{app/config.py}}
+\textbf{Role}: centralized runtime configuration dataclass.
+\begin{itemize}[leftmargin=1.4em]
+  \item Carries network, BB84, AES/HKDF, auth hardening, Eve, and logging settings.
+  \item Supports env-based defaults for password/hash/log paths.
+\end{itemize}
+
+\subsection{\texttt{app/core/}}
+\textbf{Role}: orchestration layer.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{core/server.py}: authoritative server loop, auth gate, policy enforcement, audit events.
+  \item \texttt{core/client.py}: one-shot operations and persistent REPL session.
+  \item \texttt{core/connection.py}: framed read/write helpers for plain + secure messages.
+  \item \texttt{core/auth\_security.py}: PBKDF2 hashing, verifier check, lockout/backoff state machine.
+  \item \texttt{core/session.py}: session dataclass (currently lightweight, mostly structural).
+\end{itemize}
+
+\subsection{\texttt{app/crypto/}}
+\textbf{Role}: cryptographic and QKD primitives.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{crypto/bb84.py}: qubit circuit construction and batched Aer simulation; includes Eve models and sifting/QBER logic.
+  \item \texttt{crypto/kdf.py}: HKDF-SHA256 derivation to encryption key + session ID.
+  \item \texttt{crypto/cipher.py}: AES-GCM framed encryption with sequence-AAD anti-replay check.
+  \item \texttt{crypto/signatures.py}: SHA-256 helper utility (currently auxiliary).
+\end{itemize}
+
+\subsection{\texttt{app/protocol/}}
+\textbf{Role}: message/handshake protocol definitions.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{protocol/handshake.py}: most critical protocol logic (HELLO, BB84 exchange, QBER acceptance, KDF transition, QKD logs).
+  \item \texttt{protocol/encoder.py}: length-prefixed JSON packet codec.
+  \item \texttt{protocol/messages.py}: symbolic message constants.
+  \item \texttt{protocol/router.py}: legacy helper that delegates to legacy dispatcher.
+\end{itemize}
+
+\subsection{\texttt{app/agent/}}
+\textbf{Role}: concrete operation handlers.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{agent/executor.py}: shell command execution via subprocess.
+  \item \texttt{agent/file\_transfer.py}: base64 read/write for upload/download.
+  \item \texttt{agent/system.py}: platform metadata helper (currently optional/not hot-path).
+\end{itemize}
+
+\subsection{\texttt{app/utils/}}
+\textbf{Role}: support utilities.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{utils/logger.py}: structured event logging + rotating file sink.
+  \item \texttt{utils/helpers.py}: path helper utility (light usage).
+\end{itemize}
+
+\subsection{\texttt{app/server/} (legacy path)}
+\textbf{Role}: earlier architecture based on controller/dispatcher/registry pattern.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{server/controller.py}: alternate server loop implementation.
+  \item \texttt{server/dispatcher.py}: registry-backed action routing.
+  \item \texttt{server/registry.py}: handler map abstraction.
+\end{itemize}
+Current CLI runtime does not primarily route through this stack; these files are useful as reference or for planned refactor consolidation.
+
+\subsection{\texttt{app/client.py} and \texttt{app/server.py}}
+\textbf{Role}: thin wrapper entrypoints.
+\begin{itemize}[leftmargin=1.4em]
+  \item Forward execution to \texttt{main.py}.
+  \item \texttt{app/server.py} auto-inserts \texttt{server} subcommand when no role is passed.
+\end{itemize}
+
+\subsection{\texttt{app/tests/}}
+\textbf{Role}: focused unit validation.
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{test\_bb84.py}: BB84 sifting and Eve-effect sanity checks.
+  \item \texttt{test\_crypto.py}: AES-GCM transport round-trip.
+  \item \texttt{test\_security.py}: hash/verify correctness and lockout behavior.
+\end{itemize}
+
+\section{Scripts and Documentation Assets}
+
+\subsection{\texttt{scripts/generate\_qkd\_figures.py}}
+\textbf{Role}: reproducible experiment runner for report plots.
+\begin{itemize}[leftmargin=1.4em]
+  \item Runs Monte Carlo sweeps over Eve parameters.
+  \item Exports CSV datasets (\texttt{report/data}).
+  \item Generates publication plots (\texttt{report/figures}).
+  \item Supports \texttt{quick/full} profiles for fast iteration vs deeper runs.
+\end{itemize}
+
+\subsection{\texttt{report/}}
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{qsh\_research\_report.tex}: research narrative, formulas, figures.
+  \item \texttt{qsh\_project\_structure\_manual.tex}: this architecture file.
+  \item \texttt{build\_report.ps1}: automated figure+PDF build pipeline.
+  \item \texttt{data/*.csv}, \texttt{figures/*.png}: generated experiment artifacts.
+\end{itemize}
+
+\subsection{\texttt{README.md}, \texttt{USAGE\_GUIDE.md}, \texttt{docs/protocol.md}}
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{README.md}: concise project entry, setup and quick usage.
+  \item \texttt{USAGE\_GUIDE.md}: operational guide with security/logging/report workflows.
+  \item \texttt{docs/protocol.md}: protocol-level notes (message flow and assumptions).
+\end{itemize}
+
+\section{File-by-File Status Table}
+
+\renewcommand{\arraystretch}{1.2}
+\begin{longtable}{>{\ttfamily}p{0.34\linewidth} p{0.14\linewidth} p{0.46\linewidth}}
+\toprule
+\textnormal{\textbf{File}} & \textbf{Status} & \textbf{Primary Responsibility} \\
+\midrule
+\endfirsthead
+\toprule
+\textnormal{\textbf{File}} & \textbf{Status} & \textbf{Primary Responsibility} \\
+\midrule
+\endhead
+app/main.py & Active & Primary CLI control-plane and runtime dispatch. \\
+app/config.py & Active & Central configuration model (network/crypto/auth/eve/logging). \\
+app/core/server.py & Active & Main server loop, secure channel handling, auth policy enforcement. \\
+app/core/client.py & Active & Client requests + persistent session REPL. \\
+app/core/connection.py & Active & Packet framing and socket transport helpers. \\
+app/core/auth\_security.py & Active & Password hashing, verifier validation, lockout/backoff logic. \\
+app/core/session.py & Partial & Session dataclass; structural placeholder for future richer state. \\
+app/protocol/handshake.py & Active & BB84 + HKDF handshake transition and QKD telemetry. \\
+app/protocol/encoder.py & Active & Plain JSON packet encoder/decoder. \\
+app/protocol/messages.py & Active & Message type constants. \\
+app/protocol/router.py & Legacy & Old routing wrapper over legacy dispatcher path. \\
+app/crypto/bb84.py & Active & Qiskit/Aer BB84 primitives, Eve simulation, sifting/QBER. \\
+app/crypto/kdf.py & Active & HKDF key schedule. \\
+app/crypto/cipher.py & Active & AES-GCM transport and replay/order checks. \\
+app/crypto/signatures.py & Auxiliary & SHA-256 helper utility. \\
+app/agent/executor.py & Active & Remote shell execution backend. \\
+app/agent/file\_transfer.py & Active & File upload/download serialization backend. \\
+app/agent/system.py & Auxiliary & System information helper. \\
+app/utils/logger.py & Active & Structured event logging with rotation. \\
+app/utils/helpers.py & Auxiliary & Parent-directory helper. \\
+app/server/controller.py & Legacy & Earlier server control loop implementation. \\
+app/server/dispatcher.py & Legacy & Earlier registry-based action dispatching. \\
+app/server/registry.py & Legacy & Handler registry abstraction (contains duplicated definition; cleanup candidate). \\
+app/client.py & Active wrapper & Convenience entrypoint proxy to \texttt{main.py}. \\
+app/server.py & Active wrapper & Convenience server entrypoint proxy to \texttt{main.py}. \\
+app/tests/test\_bb84.py & Active & QKD and Eve behavior tests. \\
+app/tests/test\_crypto.py & Active & AEAD transport tests. \\
+app/tests/test\_security.py & Active & Auth-hardening tests. \\
+\bottomrule
+\end{longtable}
+
+\section{Maintenance Notes and Refactor Priorities}
+\begin{enumerate}[leftmargin=1.4em]
+  \item \textbf{Consolidate duplicate architecture}: either remove legacy \texttt{app/server/*} path or unify with \texttt{core/server.py}.
+  \item \textbf{Resolve wrapper/package ambiguity risks}: maintain clear distinction between module wrappers and package folders.
+  \item \textbf{Fix duplicated content in \texttt{app/server/registry.py}}: currently duplicated class block can be cleaned.
+  \item \textbf{Promote \texttt{core/session.py}}: if richer state tracking is needed (rekey counters, QoS, per-channel stats).
+  \item \textbf{Expand tests}: integration tests for lockout reset and persistent session action mix.
+\end{enumerate}
+
+\section{Conclusion}
+QSH has a clear and robust active runtime centered on \texttt{main.py}, \texttt{core/}, \texttt{protocol/handshake.py}, and \texttt{crypto/}. The project also keeps legacy scaffolding modules that can either be retired or integrated in future refactors. This file provides a stable architecture reference for onboarding, auditing, and planning ``next-step'' engineering work.
+
+\end{document}

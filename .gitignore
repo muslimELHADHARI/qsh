@@ -1,0 +1,115 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# =========================
+# Virtual Environments
+# =========================
+venv/
+env/
+ENV/
+.venv/
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+*.env
+
+# =========================
+# Logs & Runtime Files
+# =========================
+*.log
+logs/
+*.out
+*.err
+
+# =========================
+# Database
+# =========================
+*.sqlite3
+*.db
+*.db-journal
+
+# =========================
+# IDE / Editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Testing
+# =========================
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# API / Secrets
+# =========================
+config.yaml
+secrets.json
+*.key
+
+# =========================
+# Build / Cache
+# =========================
+.cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Docker (optional)
+# =========================
+*.pid
+*.seed
+
+# =========================
+# Project-specific
+# =========================
+# Ignore stored results if large
+app/storage/*.json
+app/storage/*.db
+
+# Ignore temporary outputs
+tmp/
+output/
