@@ -13,6 +13,7 @@ class AppConfig:
     command_timeout: int = 20
     server_password: str = os.getenv("QSH_SERVER_PASSWORD", "qsh123")
     server_password_hash: str | None = os.getenv("QSH_SERVER_PASSWORD_HASH")
+    admin_password_hash: str | None = os.getenv("QSH_ADMIN_PASSWORD_HASH")
     password_hash_iterations: int = 200_000
     auth_max_failures: int = 5
     auth_lockout_seconds: int = 180
@@ -21,3 +22,5 @@ class AppConfig:
     eve_mode: str = "random"
     eve_basis_bias: float = 0.5
     log_file: str = os.getenv("QSH_LOG_FILE", "logs/qsh.log")
+    syslog_host: str | None = None
+    syslog_port: int = 514

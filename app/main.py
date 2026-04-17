@@ -19,6 +19,10 @@ def main() -> None:
     parser.add_argument("--password", default=None, help="Client password for encrypted auth step")
     parser.add_argument("--server-password", default=None, help="Password stored on server side")
     parser.add_argument("--server-password-hash", default=None, help="PBKDF2 encoded hash; overrides plain server password")
+    parser.add_argument("--admin-password", default=None, help="Admin password for firewall node")
+    parser.add_argument("--admin-password-hash", default=None, help="PBKDF2 encoded hash for admin")
+    parser.add_argument("--syslog-host", default=None, help="Host IP to send UDP syslog packets")
+    parser.add_argument("--syslog-port", default=514, type=int, help="Syslog port (default 514)")
     parser.add_argument("--auth-max-failures", type=int, default=5)
     parser.add_argument("--auth-lockout-seconds", type=int, default=180)
     parser.add_argument("--auth-throttle-base", type=float, default=0.75)
@@ -41,12 +45,18 @@ def main() -> None:
     args = parser.parse_args()
     config = AppConfig(host=args.host, port=args.port)
     config.log_file = args.log_file
-    configure_logging(log_file=config.log_file)
+    config.syslog_host = args.syslog_host
+    config.syslog_port = args.syslog_port
+    configure_logging(log_file=config.log_file, syslog_host=config.syslog_host, syslog_port=config.syslog_port)
     logger = get_logger("qsh.main")
     if args.server_password is not None:
         config.server_password = args.server_password
     if args.server_password_hash is not None:
         config.server_password_hash = args.server_password_hash
+    if args.admin_password_hash is not None:
+        config.admin_password_hash = args.admin_password_hash
+    elif args.admin_password is not None:
+        config.admin_password_hash = hash_password(args.admin_password, iterations=config.password_hash_iterations)
     config.auth_max_failures = max(1, args.auth_max_failures)
     config.auth_lockout_seconds = max(1, args.auth_lockout_seconds)
     config.auth_throttle_base_seconds = max(0.0, args.auth_throttle_base)

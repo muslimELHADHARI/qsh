@@ -83,6 +83,8 @@ def interactive_shell(config: AppConfig, password: str | None = None, noise_rate
             print("shell <cmd>")
             print("upload <local_path> <remote_path>")
             print("download <remote_path> <local_path>")
+            print("fw_sessions")
+            print("fw_kill <session_id>")
             print("exit")
             continue
         try:
@@ -120,6 +122,24 @@ def interactive_shell(config: AppConfig, password: str | None = None, noise_rate
                 Path(parts[2]).parent.mkdir(parents=True, exist_ok=True)
                 Path(parts[2]).write_bytes(base64.b64decode(response["content_b64"].encode("ascii")))
                 print(f"saved {parts[2]}")
+            elif command == "fw_sessions":
+                response = session.request({"action": "list_sessions"})
+                if response.get("type") == "ADMIN_RESULT":
+                    print("Active Sessions:")
+                    for s_id, info in response.get("sessions", {}).items():
+                        role = "admin" if info.get("is_admin") else "user"
+                        print(f"  {s_id}\t{info.get('ip')}\t[{role}]")
+                else:
+                    print(f"error: {response.get('message')}")
+            elif command == "fw_kill":
+                if len(parts) != 2:
+                    print("usage: fw_kill <session_id>")
+                    continue
+                response = session.request({"action": "kill_session", "target": parts[1]})
+                if response.get("type") == "ADMIN_RESULT":
+                    print(f"Initiated disconnect for {parts[1]}")
+                else:
+                    print(f"error: {response.get('message')}")
             else:
                 print(f"unknown command: {command}")
         except Exception as exc:
