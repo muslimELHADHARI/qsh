@@ -1,4 +1,5 @@
 import argparse
+import sys
 from getpass import getpass
 
 from config import AppConfig
@@ -73,31 +74,35 @@ def main() -> None:
         log_file=config.log_file,
     )
 
-    if args.role == "server":
-        print("[QSH][Server] password auth enabled")
-        start(config)
-    elif args.role == "shell":
-        password = args.password or getpass("QSH password: ")
-        result = run_shell(config, args.command, password=password, noise_rate=args.noise_rate)
-        shell_result = result["result"]
-        print(f"exit={shell_result['return_code']}")
-        if shell_result["stdout"]:
-            print("stdout:")
-            print(shell_result["stdout"])
-        if shell_result["stderr"]:
-            print("stderr:")
-            print(shell_result["stderr"])
-    elif args.role == "upload":
-        password = args.password or getpass("QSH password: ")
-        print(upload(config, args.local_path, args.remote_path, password=password, noise_rate=args.noise_rate))
-    elif args.role == "download":
-        password = args.password or getpass("QSH password: ")
-        print(download(config, args.remote_path, args.local_path, password=password, noise_rate=args.noise_rate))
-    elif args.role == "session":
-        interactive_shell(config, password=args.password, noise_rate=args.noise_rate)
-    elif args.role == "hash-password":
-        raw = args.value or getpass("Password to hash: ")
-        print(hash_password(raw, iterations=config.password_hash_iterations))
+    try:
+        if args.role == "server":
+            print("[QSH][Server] password auth enabled")
+            start(config)
+        elif args.role == "shell":
+            password = args.password or getpass("QSH password: ")
+            result = run_shell(config, args.command, password=password, noise_rate=args.noise_rate)
+            shell_result = result["result"]
+            print(f"exit={shell_result['return_code']}")
+            if shell_result["stdout"]:
+                print("stdout:")
+                print(shell_result["stdout"])
+            if shell_result["stderr"]:
+                print("stderr:")
+                print(shell_result["stderr"])
+        elif args.role == "upload":
+            password = args.password or getpass("QSH password: ")
+            print(upload(config, args.local_path, args.remote_path, password=password, noise_rate=args.noise_rate))
+        elif args.role == "download":
+            password = args.password or getpass("QSH password: ")
+            print(download(config, args.remote_path, args.local_path, password=password, noise_rate=args.noise_rate))
+        elif args.role == "session":
+            interactive_shell(config, password=args.password, noise_rate=args.noise_rate)
+        elif args.role == "hash-password":
+            raw = args.value or getpass("Password to hash: ")
+            print(hash_password(raw, iterations=config.password_hash_iterations))
+    except RuntimeError as exc:
+        print(f"\n[QSH] Connection aborted: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
