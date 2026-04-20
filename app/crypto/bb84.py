@@ -130,8 +130,7 @@ def sift_key(
     if sample_indexes is None:
         check_idx = set(random.sample(range(len(s_bits)), check_count)) if check_count else set()
     else:
-        bounded = [idx for idx in sample_indexes if 0 <= idx < len(s_bits)]
-        check_idx = set(bounded[:check_count])
+        check_idx = set(sample_indexes[:check_count])
 
     mismatches = 0
     key: list[int] = []
@@ -142,7 +141,7 @@ def sift_key(
         elif s_bit == r_bit:
             key.append(s_bit)
 
-    qber = mismatches / check_count if check_count else 0.0
+    qber = mismatches / len(check_idx) if check_idx else 0.0
     return BB84Result(key, qber)
 
 

@@ -43,8 +43,9 @@ def client_handshake(conn: socket.socket, config: AppConfig, noise_rate: float =
         measured = measure_material(sender, receiver_bases, noise_rate=noise_rate)
         eve_stats = None
     salt = os.urandom(16)
-    sample_count = min(config.bb84_sample_size, config.bb84_bits)
-    sample_indexes = random.sample(range(config.bb84_bits), sample_count) if sample_count else []
+    matching_count = sum(1 for a, b in zip(sender.bases, receiver_bases) if a == b)
+    sample_count = min(config.bb84_sample_size, matching_count // 2)
+    sample_indexes = random.sample(range(matching_count), sample_count) if sample_count else []
     send_plain(
         conn,
         {
